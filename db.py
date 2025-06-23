@@ -24,6 +24,7 @@ class DataBase():
     # Получение списка всех таблиц в БД
     def __get_tables(self) -> list[str]:
         try:
+            # Подключаемся к БД 
             with self.__connect() as conn:
                 with conn.cursor() as cur:
 
@@ -43,38 +44,33 @@ class DataBase():
             print(e)
             return []
 
-    # Возвращает список колонок таблицы
-    def __get_columns(self, table_name: str, schema: str = 'public') -> list:
+    # Возвращает список колонок таблицы в порядке их объявления (исключая id)
+    def __get_columns(self, table_name: str) -> list:
         try:
             with self.__connect() as conn:
                 with conn.cursor() as cur:
-
-                    # Параметризованный запрос
-                    cur.execute('''
+                    cur.execute("""
                         SELECT column_name 
                         FROM information_schema.columns 
-                        WHERE table_schema = %s 
-                        AND table_name = %s 
-                        ORDER BY ordinal_position;
-                    ''', (schema, table_name))
+                        WHERE table_name = %s 
+                        ORDER BY ordinal_position
+                    """, (table_name,))
                 
-                    # Возвращаем список колонок (имя_колонки)
-                    return cur.fetchall()
-                
-        except psycopg2.Error as e:
-            print(e)
+                    # Исключаем id из списка колонок
+                    return [row[0] for row in cur.fetchall() if row[0] != 'id']
+        except psycopg2.Error:
             return []
 
 
-    # Создание таблицы в бд
+    # Создание таблицы в БД
     def createTable(self, table_name:str, **columns:str) -> None:
         try:
-            # Подключаемся к бд
+            # Подключаемся к БД
             with self.__connect() as conn:
-                with conn.cursor() as ptr:
+                with conn.cursor() as cur:
 
                     # Создание основной таблицы
-                    ptr.execute(sql.SQL("CREATE TABLE IF NOT EXISTS {} (id SERIAL PRIMARY KEY);").format(sql.Identifier(table_name)))
+                    cur.execute(sql.SQL("CREATE TABLE IF NOT EXISTS {} (id SERIAL PRIMARY KEY);").format(sql.Identifier(table_name)))
                 
                     # Добавление колонок
                     for col_name, col_type in columns.items():
@@ -83,7 +79,7 @@ class DataBase():
                             sql.Identifier(col_name),
                             sql.SQL(col_type)
                         )
-                        ptr.execute(query)
+                        cur.execute(query)
 
                     # Сохраняем изменения
                     conn.commit()
@@ -92,24 +88,49 @@ class DataBase():
             print(e)
 
 
-    # def insertItem(self, table_name:str) -> None:
-    #     try:
-    #         # Проверяем существование таблицы в бд
-    #         if table_name in self.__get_tables():
+    def insertString(self, table_name: str, **data: str) -> None:
+        try:
+            # Проверяем существование таблицы
+            if table_name not in self.__get_tables():
+                raise psycopg2.Error(f"Table '{table_name}' does not exist in the database")
+        
+            # Получаем список всех существующих колонок
+            available_columns = self.__get_columns(table_name)
+        
+            # Проверяем соответствие колонок
+            data_columns = set(data.keys())
+            table_columns_set = set(available_columns)
+        
+            # Проверка существования колонн в таблице
+            if not data_columns.issubset(table_columns_set):
+                raise psycopg2.Error(f"Some columns are missing from the table")
+        
+            # Проверка на совпадение кол-ва колонн
+            if len(data_columns) != len(available_columns):
+                missing_columns = table_columns_set - data_columns
+                raise psycopg2.Error("The number of columns transferred does not match the number of columns in the table")
+        
+            # Подключение к БД
+            with self.__connect() as conn:
+                with conn.cursor() as cur:
 
-    #             # Подключаемся к бд
-    #             with self.__connect() as conn:
-    #                 with conn.cursor() as ptr:
-
-    #                     query = sql.SQL("INSERT INTO {} ()").format(
-    #                         sql.Identifier(table_name),
-
-    #                     )
-
-    #     except psycopg2.Error as e:
-    #         print(e)
-
+                    # Формируем запрос с правильным порядком колонок
+                    values = [data[col] for col in available_columns]
+                
+                    query = sql.SQL("INSERT INTO {} ({}) VALUES ({})").format(
+                        sql.Identifier(table_name),
+                        sql.SQL(', ').join(map(sql.Identifier, available_columns)),
+                        sql.SQL(', ').join([sql.Placeholder()] * len(available_columns))
+                    )
+                
+                    cur.execute(query, values)
+                    conn.commit()
+                
+        except psycopg2.Error as e:
+            print(f"Database error: {e}")
 
 
 def main():
     db = DataBase('app_db', 'app', 'app')
+    bebra = '1'
+    zalupa = '2'
