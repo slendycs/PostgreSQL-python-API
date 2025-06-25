@@ -19,7 +19,7 @@ class Logger:
             current_time = current_time.split('.')[0]
 
             # Производим запись сообщения в файл
-            file.write(current_time + '\t' + message)
+            file.write(current_time + '\t' + message + '\n')
 
 
 
@@ -62,12 +62,12 @@ class DataBase():
                     tables = [row[0] for row in cur.fetchall()]
                     return tables
                 
-        except psycopg2.Error as e:
+        except (psycopg2.Error, Exception) as e:
             self._logger.log(str(e))
             return []
 
     # Возвращает список колонок таблицы в порядке их объявления (исключая id)
-    def __get_columns(self, table_name: str) -> list:
+    def __get_columns(self, table_name: str, id: bool = False) -> list:
         try:
             with self.__connect() as conn:
                 with conn.cursor() as cur:
@@ -79,8 +79,11 @@ class DataBase():
                     """, (table_name,))
                 
                     # Исключаем id из списка колонок
-                    return [row[0] for row in cur.fetchall() if row[0] != 'id']
-        except psycopg2.Error as e:
+                    if id == False:
+                        return [row[0] for row in cur.fetchall() if row[0] != 'id']
+                    else:
+                        return cur.fetchall()
+        except (psycopg2.Error, Exception) as e:
             self._logger.log(str(e))
             return []
 
@@ -91,23 +94,26 @@ class DataBase():
             # Подключаемся к БД
             with self.__connect() as conn:
                 with conn.cursor() as cur:
-
-                    # Создание основной таблицы
-                    cur.execute(sql.SQL("CREATE TABLE IF NOT EXISTS {} (id SERIAL PRIMARY KEY);").format(sql.Identifier(table_name)))
+                    try:
+                        # Создание основной таблицы
+                        cur.execute(sql.SQL("CREATE TABLE IF NOT EXISTS {} (id SERIAL PRIMARY KEY);").format(sql.Identifier(table_name)))
                 
-                    # Добавление колонок
-                    for col_name, col_type in columns.items():
-                        query = sql.SQL("ALTER TABLE {} ADD COLUMN IF NOT EXISTS {} {};").format(
-                            sql.Identifier(table_name),
-                            sql.Identifier(col_name),
-                            sql.SQL(col_type)
-                        )
-                        cur.execute(query)
+                        # Добавление колонок
+                        for col_name, col_type in columns.items():
+                            query = sql.SQL("ALTER TABLE {} ADD COLUMN IF NOT EXISTS {} {};").format(
+                                sql.Identifier(table_name),
+                                sql.Identifier(col_name),
+                                sql.SQL(col_type)
+                            )
+                            cur.execute(query)
 
-                    # Сохраняем изменения
-                    conn.commit()
+                        # Сохраняем изменения
+                        conn.commit()
+                    except psycopg2.Error as e:
+                        self._logger.log(str(e))
+                        conn.rollback()
 
-        except psycopg2.Error as e:
+        except (psycopg2.Error, Exception) as e:
             self._logger.log(str(e))
 
 
@@ -146,11 +152,56 @@ class DataBase():
                         sql.SQL(', ').join([sql.Placeholder()] * len(available_columns))
                     )
 
-                    # Выполняем запрос
-                    cur.execute(query, values)
+                    try:
+                        # Выполняем запрос
+                        cur.execute(query, values)
 
-                    # Сохраняем изменения
-                    conn.commit()
+                        # Сохраняем изменения
+                        conn.commit()
+                    except psycopg2.Error as e:
+                        self._logger.log(str(e))
+                        conn.rollback()
                 
-        except psycopg2.Error as e:
+        except (psycopg2.Error, Exception) as e:
             self._logger.log(str(e))
+
+
+    def getString(self, table_name:str, condition:str, params:tuple) -> list[dict]:
+        try:
+            # Проверяем существование таблицы
+            if table_name not in self.__get_tables():
+                raise psycopg2.Error(f"Table '{table_name}' does not exist in the database")
+                
+            # Подключение к БД
+            with self.__connect() as conn:
+                with conn.cursor() as cur:
+
+                    # Формируем запрос
+                    query = sql.SQL("SELECT * FROM {} WHERE {}").format(
+                        sql.Identifier(table_name),
+                        sql.SQL(condition)
+                    )
+
+                    # Выполняем запрос
+                    cur.execute(query, params)
+                    response = cur.fetchall()
+                    
+                    # Формируем вывод
+                    available_columns = self.__get_columns(table_name, id=True)
+                    result = []
+
+                    for string in response:
+                        data = {}
+
+                        # Формируем словарь для каждой строки ответа
+                        for i in range(len(string)):
+                            data[available_columns[i][0]] = string[i]
+
+                        # Добавляем словарь в список
+                        result.append(data)
+                        
+                    return result 
+
+        except (psycopg2.Error, Exception) as e:
+            self._logger.log(str(e))
+            return []
