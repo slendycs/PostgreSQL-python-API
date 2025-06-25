@@ -1,8 +1,29 @@
 import psycopg2
 from psycopg2 import sql
+import datetime
+
+class Logger:
+    # Конструктор по умолчанию
+    def __init__(self, file_name:str):
+        self._message:str = ''
+        self._file_name:str = file_name + '.log'
+
+    # Запись в лог
+    def log(self, message:str):
+
+        # Открываем файл
+        with open(self._file_name, 'a', encoding='utf-8') as file:
+            
+            # Узнаём текущее время
+            current_time:str = str(datetime.datetime.now())
+            current_time = current_time.split('.')[0]
+
+            # Производим запись сообщения в файл
+            file.write(current_time + '\t' + message)
+
+
 
 class DataBase():
-
     # Конструктор по-умолчанию
     def __init__(self, name:str, user:str, password:str, host:str='localhost', port:str='5432') -> None:
         self._db_name:str = name # Название базы данных
@@ -10,6 +31,7 @@ class DataBase():
         self._db_password:str = password # Парльль PostgreSQL
         self._db_host:str = host # Адрес базы данных
         self._db_port:str = port # Порт базы данных
+        self._logger:Logger = Logger(name) # Логгер
     
     # Создание подключения к БД
     def __connect(self):
@@ -41,7 +63,7 @@ class DataBase():
                     return tables
                 
         except psycopg2.Error as e:
-            print(e)
+            self._logger.log(str(e))
             return []
 
     # Возвращает список колонок таблицы в порядке их объявления (исключая id)
@@ -58,7 +80,8 @@ class DataBase():
                 
                     # Исключаем id из списка колонок
                     return [row[0] for row in cur.fetchall() if row[0] != 'id']
-        except psycopg2.Error:
+        except psycopg2.Error as e:
+            self._logger.log(str(e))
             return []
 
 
@@ -85,7 +108,7 @@ class DataBase():
                     conn.commit()
 
         except psycopg2.Error as e:
-            print(e)
+            self._logger.log(str(e))
 
 
     def insertString(self, table_name: str, **data: str) -> None:
@@ -122,15 +145,12 @@ class DataBase():
                         sql.SQL(', ').join(map(sql.Identifier, available_columns)),
                         sql.SQL(', ').join([sql.Placeholder()] * len(available_columns))
                     )
-                
+
+                    # Выполняем запрос
                     cur.execute(query, values)
+
+                    # Сохраняем изменения
                     conn.commit()
                 
         except psycopg2.Error as e:
-            print(f"Database error: {e}")
-
-
-def main():
-    db = DataBase('app_db', 'app', 'app')
-    bebra = '1'
-    zalupa = '2'
+            self._logger.log(str(e))
