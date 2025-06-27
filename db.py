@@ -87,6 +87,11 @@ class DataBase():
             self._logger.log(str(e))
             return []
 
+    # Проверка существования таблицы
+    def __checkAvailableTable(self, table_name:str) -> None:
+    
+        if table_name not in self.__get_tables():
+            raise psycopg2.Error(f"Table '{table_name}' does not exist in the database")
 
     # Создание таблицы в БД
     def createTable(self, table_name:str, **columns:str) -> None:
@@ -120,8 +125,7 @@ class DataBase():
     def insertString(self, table_name: str, **data: str) -> None:
         try:
             # Проверяем существование таблицы
-            if table_name not in self.__get_tables():
-                raise psycopg2.Error(f"Table '{table_name}' does not exist in the database")
+            self.__checkAvailableTable(table_name)
         
             # Получаем список всех существующих колонок
             available_columns = self.__get_columns(table_name)
@@ -169,9 +173,8 @@ class DataBase():
     def getString(self, table_name:str, condition:str, params:tuple) -> list[dict]:
         try:
             # Проверяем существование таблицы
-            if table_name not in self.__get_tables():
-                raise psycopg2.Error(f"Table '{table_name}' does not exist in the database")
-                
+            self.__checkAvailableTable(table_name)
+
             # Подключение к БД
             with self.__connect() as conn:
                 with conn.cursor() as cur:
@@ -205,3 +208,50 @@ class DataBase():
         except (psycopg2.Error, Exception) as e:
             self._logger.log(str(e))
             return []
+        
+    def updateData(self, table_name: str, updates: dict, condition: str, condition_params: tuple) -> None:
+        try:
+            # Проверяем существование таблицы
+            self.__checkAvailableTable(table_name)
+
+            # Проверяем существование колонок
+            available_columns = self.__get_columns(table_name, id=True)
+            for column in updates.keys():
+                if column not in available_columns:
+                    raise ValueError(f"Column '{column}' does not exist")
+
+            # Подключение к БД
+            with self.__connect() as conn:
+                with conn.cursor() as cur:
+
+                    # Безопасное формирование SET части
+                    set_parts = []
+                    set_values = []
+                    for column, value in updates.items():
+                        set_parts.append(sql.SQL("{} = %s").format(sql.Identifier(column)))
+                        set_values.append(value)
+                
+                    # Формируем полный запрос
+                    query = sql.SQL("UPDATE {} SET {} WHERE {}").format(
+                        sql.Identifier(table_name),
+                        sql.SQL(', ').join(set_parts),
+                        sql.SQL(condition)
+                    )
+                
+                    # Объединяем параметры
+                    params = tuple(set_values) + condition_params
+                
+
+                    # Выполняем запрос
+                    try:
+                        # Выполняем запрос
+                        cur.execute(query, params)
+
+                        # Сохраняем изменения
+                        conn.commit()
+                    except psycopg2.Error as e:
+                        self._logger.log(str(e))
+                        conn.rollback()
+
+        except (psycopg2.Error, Exception) as e:
+            self._logger.log(str(e))
