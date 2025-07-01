@@ -92,6 +92,13 @@ class DataBase():
     
         if table_name not in self.__get_tables():
             raise psycopg2.Error(f"Table '{table_name}' does not exist in the database")
+        
+    def __checkAvailableColums(self, table_name:str, conditions:dict) -> None:
+
+        available_columns = self.__get_columns(table_name, id=True)
+        for column in conditions.keys():
+            if column not in available_columns:
+                raise psycopg2.Error(f"Column '{column}' does not exist")
 
     # Создание таблицы в БД
     def createTable(self, table_name:str, **columns:str) -> None:
@@ -215,10 +222,7 @@ class DataBase():
             self.__checkAvailableTable(table_name)
 
             # Проверяем существование колонок
-            available_columns = self.__get_columns(table_name, id=True)
-            for column in updates.keys():
-                if column not in available_columns:
-                    raise ValueError(f"Column '{column}' does not exist")
+            self.__checkAvailableColums(table_name, updates)
 
             # Подключение к БД
             with self.__connect() as conn:
@@ -241,14 +245,55 @@ class DataBase():
                     # Объединяем параметры
                     params = tuple(set_values) + condition_params
                 
-
-                    # Выполняем запрос
                     try:
                         # Выполняем запрос
                         cur.execute(query, params)
 
                         # Сохраняем изменения
                         conn.commit()
+                    except psycopg2.Error as e:
+                        self._logger.log(str(e))
+                        conn.rollback()
+
+        except (psycopg2.Error, Exception) as e:
+            self._logger.log(str(e))
+
+    def deleteData(self, table_name: str, conditions: dict) -> None:
+        try:
+            # Проверяем существование таблицы
+            self.__checkAvailableTable(table_name)
+
+            # Проверяем существование колонн
+            self.__checkAvailableColums(table_name, conditions)
+
+            # Формируем WHERE часть запроса
+            where_parts = []
+            where_values = []
+            for column, value in conditions.items():
+                where_parts.append(sql.SQL("{} = %s").format(sql.Identifier(column)))
+                where_values.append(value)
+
+            # Защита от удаления всей таблицы
+            if not where_parts:
+                raise psycopg2.Error("Delete without conditions is not allowed")
+
+            # Подключаемся к БД
+            with self.__connect() as conn:
+                with conn.cursor() as cur:
+                    
+                    # Формируем запрос
+                    query = sql.SQL("DELETE FROM {} WHERE {}").format(
+                        sql.Identifier(table_name),
+                        sql.SQL(' AND ').join(where_parts)
+                    )
+
+                    try:
+                        # Выполняем запрос
+                        cur.execute(query, tuple(where_values))
+
+                        # Сохраняем изменения
+                        conn.commit()
+
                     except psycopg2.Error as e:
                         self._logger.log(str(e))
                         conn.rollback()
