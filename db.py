@@ -3,7 +3,7 @@ from psycopg2 import sql
 import datetime
 
 class Logger:
-    # Конструктор по умолчанию
+    # Конструктор по-умолчанию
     def __init__(self, file_name:str):
         self._message:str = ''
         self._file_name:str = file_name + '.log'
@@ -28,7 +28,7 @@ class DataBase():
     def __init__(self, name:str, user:str, password:str, host:str='localhost', port:str='5432') -> None:
         self._db_name:str = name # Название базы данных
         self._db_user:str = user # Пользователь PostgreSQL
-        self._db_password:str = password # Парльль PostgreSQL
+        self._db_password:str = password # Пароль PostgreSQL
         self._db_host:str = host # Адрес базы данных
         self._db_port:str = port # Порт базы данных
         self._logger:Logger = Logger(name) # Логгер
