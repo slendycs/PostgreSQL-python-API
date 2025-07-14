@@ -1,4 +1,4 @@
-[PostgreSQL-python-API](https://github.com/slendycs/PostgreSQL-python-API) - Обёртка для работы с PostgeSQL, позволяющая работать с базой данных избегая написания большинства SQL запросов.
+[PostgreSQL-python-API](https://github.com/slendycs/PostgreSQL-python-API) - Обёртка для работы с PostgreSQL, позволяющая работать с базой данных избегая написания большинства SQL запросов.
 
 ### Начало работы
 
