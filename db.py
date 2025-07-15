@@ -76,11 +76,16 @@ class DataBase():
             raise psycopg2.Error(f"Table '{table_name}' does not exist in the database")
         
     def __checkAvailableColums(self, table_name:str, conditions:dict) -> None:
-
-        available_columns = self.__get_columns(table_name, id=True)
-        for column in conditions.keys():
-            if column not in available_columns:
-                raise psycopg2.Error(f"Column '{column}' does not exist")
+        # Получаем список всех существующих колонок
+        available_columns = self.__get_columns(table_name)
+        
+        # Проверяем соответствие колонок
+        data_columns = set(conditions.keys())
+        table_columns_set = set(available_columns)
+        
+        # Проверка существования колонн в таблице
+        if not data_columns.issubset(table_columns_set):
+            raise psycopg2.Error(f"Columns '{data_columns}' does not exist")
 
     # Создание таблицы в БД
     def createTable(self, table_name:str, **columns:str) -> None:
@@ -115,19 +120,15 @@ class DataBase():
         try:
             # Проверяем существование таблицы
             self.__checkAvailableTable(table_name)
-        
-            # Получаем список всех существующих колонок
-            available_columns = self.__get_columns(table_name)
-        
+
             # Проверяем соответствие колонок
+            self.__checkAvailableColums(table_name, data)
+
+            # Проверка на совпадение кол-ва колонн
+            available_columns = self.__get_columns(table_name)
             data_columns = set(data.keys())
             table_columns_set = set(available_columns)
-        
-            # Проверка существования колонн в таблице
-            if not data_columns.issubset(table_columns_set):
-                raise psycopg2.Error(f"Some columns are missing from the table")
-        
-            # Проверка на совпадение кол-ва колонн
+
             if len(data_columns) != len(available_columns):
                 missing_columns = table_columns_set - data_columns
                 raise psycopg2.Error("The number of columns transferred does not match the number of columns in the table")
