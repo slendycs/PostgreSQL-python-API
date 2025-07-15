@@ -1,27 +1,6 @@
 import psycopg2
 from psycopg2 import sql
-import datetime
-
-class Logger:
-    # Конструктор по-умолчанию
-    def __init__(self, file_name:str):
-        self._message:str = ''
-        self._file_name:str = file_name + '.log'
-
-    # Запись в лог
-    def log(self, message:str):
-
-        # Открываем файл
-        with open(self._file_name, 'a', encoding='utf-8') as file:
-            
-            # Узнаём текущее время
-            current_time:str = str(datetime.datetime.now())
-            current_time = current_time.split('.')[0]
-
-            # Производим запись сообщения в файл
-            file.write(current_time + '\t' + message + '\n')
-
-
+import logging
 
 class DataBase():
     # Конструктор по-умолчанию
@@ -31,7 +10,10 @@ class DataBase():
         self._db_password:str = password # Пароль PostgreSQL
         self._db_host:str = host # Адрес базы данных
         self._db_port:str = port # Порт базы данных
-        self._logger:Logger = Logger(name) # Логгер
+
+        # Настройка логгера
+        self._logger = logging.getLogger(name)
+        logging.basicConfig(level=logging.ERROR, filename=f"{name}.log", filemode='w', format="%(asctime)s %(levelname)s %(message)s")
     
     # Создание подключения к БД
     def __connect(self):
@@ -63,7 +45,7 @@ class DataBase():
                     return tables
                 
         except (psycopg2.Error, Exception) as e:
-            self._logger.log(str(e))
+            self._logger.error(str(e))
             return []
 
     # Возвращает список колонок таблицы в порядке их объявления (исключая id)
@@ -84,7 +66,7 @@ class DataBase():
                     else:
                         return cur.fetchall()
         except (psycopg2.Error, Exception) as e:
-            self._logger.log(str(e))
+            self._logger.error(str(e))
             return []
 
     # Проверка существования таблицы
@@ -122,11 +104,11 @@ class DataBase():
                         # Сохраняем изменения
                         conn.commit()
                     except psycopg2.Error as e:
-                        self._logger.log(str(e))
+                        self._logger.error(str(e))
                         conn.rollback()
 
         except (psycopg2.Error, Exception) as e:
-            self._logger.log(str(e))
+            self._logger.error(str(e))
 
 
     def insertString(self, table_name: str, **data: str) -> None:
@@ -170,11 +152,11 @@ class DataBase():
                         # Сохраняем изменения
                         conn.commit()
                     except psycopg2.Error as e:
-                        self._logger.log(str(e))
+                        self._logger.error(str(e))
                         conn.rollback()
                 
         except (psycopg2.Error, Exception) as e:
-            self._logger.log(str(e))
+            self._logger.error(str(e))
 
 
     def getString(self, table_name:str, condition:str, params:tuple) -> list[dict]:
@@ -213,7 +195,7 @@ class DataBase():
                     return result 
 
         except (psycopg2.Error, Exception) as e:
-            self._logger.log(str(e))
+            self._logger.error(str(e))
             return []
         
     def updateData(self, table_name: str, updates: dict, condition: str, condition_params: tuple) -> None:
@@ -252,11 +234,11 @@ class DataBase():
                         # Сохраняем изменения
                         conn.commit()
                     except psycopg2.Error as e:
-                        self._logger.log(str(e))
+                        self._logger.error(str(e))
                         conn.rollback()
 
         except (psycopg2.Error, Exception) as e:
-            self._logger.log(str(e))
+            self._logger.error(str(e))
 
     def deleteData(self, table_name: str, conditions: dict) -> None:
         try:
@@ -295,8 +277,8 @@ class DataBase():
                         conn.commit()
 
                     except psycopg2.Error as e:
-                        self._logger.log(str(e))
+                        self._logger.error(str(e))
                         conn.rollback()
 
         except (psycopg2.Error, Exception) as e:
-            self._logger.log(str(e))
+            self._logger.error(str(e))
