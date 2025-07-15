@@ -187,9 +187,9 @@ class DataBase():
                 with conn.cursor() as cur:
 
                     # Формируем запрос
-                    query = sql.SQL("SELECT * FROM {} WHERE {}").format(
-                        sql.Identifier(table_name),
-                        sql.SQL(condition)
+                    query = sql.SQL("SELECT * FROM {table} WHERE {conditions}").format(
+                        table = sql.Identifier(table_name),
+                        conditions = sql.SQL(condition)
                     )
 
                     # Выполняем запрос
